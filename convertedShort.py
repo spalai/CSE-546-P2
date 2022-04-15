@@ -1,6 +1,3 @@
-from http.client import ImproperConnectionState
-import queue
-import numpy as np
 import cv2
 import time
 import threading
@@ -53,12 +50,43 @@ def captureVideo():
     out.release()
     cv2.destroyAllWindows()
 
+
+#vidName naming convetntion : vid-<COUNT>.avi
+#FrameName can be: frame-vid<count>-<count>.avi
 def extractFrame(vidName):
-    os.system("ffmpeg -i " + str(videoPath+vidName) + " -r 1 " + str(framePath) + "image-"+"vidName"+".jpeg")
+    frameName = vidName[:-4]
+    print (frameName)
+    frameName = "frame-"+frameName+"-%3d.jpeg"
+    print(frameName)
+    absFramePath = str(framePath)+frameName
+
+    # png format seems to be consuming lots of disk space. Need to decide later if it is better for face recognition
+    os.system("ffmpeg -i " + str(videoPath+vidName) + " -r 2 " + absFramePath)
     print("frame extracted")
+    addFrameToQueue(vidName)
+
+#for the specific video add the related frames in the queue
+def addFrameToQueue(vidName):
+    #converting vidName to uniquely identify its associated frames
+    vidName = vidName[:-4]
+    searchString = "-"+vidName+"-"
+
+    for fileName in os.listdir(framePath):
+        if (fileName.endswith(".jpeg")):
+            if searchString in fileName:
+                absFramePath = framePath + fileName
+                print("absolute frame path " + absFramePath)
+                frameQueue.put(absFramePath)
+    
 
 
-        
+    
+
+    
+
+# extract frame 
+# upload the frame in s3
+# upload the video in s3        
 def uploadVideo():
     while True:
         if (videoQueue.empty()):
@@ -68,7 +96,15 @@ def uploadVideo():
             extractFrame(videoQueue.get())
 
 
+
+# get all the frames from 
 def uploadFrame():
+    pass
+
+
+# collect response from SQS
+# process the result and dump
+def collectResult():
     pass
 
 thread1 = Thread(target = uploadVideo, args = ())
