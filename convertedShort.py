@@ -1,6 +1,9 @@
 import cv2
 import time
 import threading
+import logging
+import boto3
+from botocore.exceptions import ClientError
 import os
 
 from threading import Thread
@@ -10,6 +13,7 @@ vidQueueLock = threading.Lock()
 
 videoQueue = Queue(maxsize=0)
 frameQueue = Queue(maxsize=0)
+uploadVideoQueue = Queue(maxsize=0)
 
 videoPath = "./"
 framePath = videoPath + "frames/"
@@ -54,6 +58,7 @@ def captureVideo():
 #vidName naming convetntion : vid-<COUNT>.avi
 #FrameName can be: frame-vid<count>-<count>.avi
 def extractFrame(vidName):
+    uploadVideoQueue.put(vidName)
     frameName = vidName[:-4]
     print (frameName)
     frameName = "frame-"+frameName+"-%3d.jpeg"
@@ -77,17 +82,11 @@ def addFrameToQueue(vidName):
                 absFramePath = framePath + fileName
                 print("absolute frame path " + absFramePath)
                 frameQueue.put(absFramePath)
-    
-
-
-    
-
-    
 
 # extract frame 
 # upload the frame in s3
 # upload the video in s3        
-def uploadVideo():
+def processFrames():
     while True:
         if (videoQueue.empty()):
             time.sleep(1)
@@ -95,11 +94,40 @@ def uploadVideo():
             # extract frames from video
             extractFrame(videoQueue.get())
 
-
-
 # get all the frames from 
 def uploadFrame():
-    pass
+    while True:
+        if (frameQueue.empty() != True):
+            frameToUpload = frameQueue.get()
+            print("going to upload frame " + frameToUpload)
+            upload_file(frameToUpload, "s3-12a", None)
+        else:
+            time.sleep(1)    
+
+    
+def upload_file(file_name, bucket, object_name=None):
+    # If S3 object_name was not specified, use file_name
+    if object_name is None:
+        object_name = os.path.basename(file_name)
+
+    # Upload the file
+    s3_client = boto3.client('s3')
+    try:
+        response = s3_client.upload_file(file_name, bucket, object_name)
+        # pass
+    except ClientError as e:
+        logging.error(e)
+        return False
+    return True
+
+def uploadVideo():
+    while True:
+        if(uploadVideoQueue.empty()):
+            time.sleep(2)
+        else:
+            vidName = uploadVideoQueue.get()
+            print("video to be uploaded " + vidName)
+            upload_file(vidName, "s3-12a", None)
 
 
 # collect response from SQS
@@ -107,8 +135,14 @@ def uploadFrame():
 def collectResult():
     pass
 
-thread1 = Thread(target = uploadVideo, args = ())
+thread1 = Thread(target = processFrames, args = ())
 thread1.start()
+
+thread2 = Thread(target = uploadFrame, args = ())
+thread2.start()
+
+thread3 = Thread(target = uploadVideo, args = ())
+thread3.start()
 
 captureVideo()
 
