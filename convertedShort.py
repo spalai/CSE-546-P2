@@ -5,6 +5,7 @@ import logging
 import boto3
 from botocore.exceptions import ClientError
 import os
+import numpy
 
 from threading import Thread
 from queue import Queue
@@ -61,7 +62,7 @@ def extractFrame(vidName):
     uploadVideoQueue.put(vidName)
     frameName = vidName[:-4]
     print (frameName)
-    frameName = "frame-"+frameName+"-%3d.jpeg"
+    frameName = "frame-"+frameName+"-%3d.png"
     print(frameName)
     absFramePath = str(framePath)+frameName
 
@@ -77,7 +78,7 @@ def addFrameToQueue(vidName):
     searchString = "-"+vidName+"-"
 
     for fileName in os.listdir(framePath):
-        if (fileName.endswith(".jpeg")):
+        if (fileName.endswith(".png")):
             if searchString in fileName:
                 absFramePath = framePath + fileName
                 print("absolute frame path " + absFramePath)
@@ -114,6 +115,7 @@ def upload_file(file_name, bucket, object_name=None):
     s3_client = boto3.client('s3')
     try:
         response = s3_client.upload_file(file_name, bucket, object_name)
+        print("s3 uploaded")
         # pass
     except ClientError as e:
         logging.error(e)
